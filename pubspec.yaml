@@ -95,6 +95,19 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   change_app_package_name: ^1.5.0
 
+# TEMPORARY: testing DavBfr/dart_pdf#1929 (unmerged) for Indic (Gujarati/Hindi)
+# OpenType GSUB/GPOS shaping support, forked to Nautilus-Techlabs/dart_pdf and
+# pinned to the commit verified against Day 34.csv content. `printing` also
+# depends on `pdf` from pub.dev, so this override is required to force the
+# git-sourced package everywhere. Remove once upstream PR merges & releases,
+# or once this fork is adopted as the permanent solution.
+dependency_overrides:
+  pdf:
+    git:
+      url: https://github.com/Nautilus-Techlabs/dart_pdf.git
+      path: pdf
+      ref: "c9194084016ce23c1ea3b7ff1e01fae352dd0b49" # tag: indic-shaping-verified
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
