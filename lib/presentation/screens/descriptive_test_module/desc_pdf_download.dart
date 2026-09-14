@@ -23,6 +23,10 @@ Future<String> generateDescTestPdf(
 }) async {
   final base = await rootBundle.load("assets/fonts/ArialUnicodeMs.otf");
   final baseFont = pw.Font.ttf(base);
+  final gujaratiFontData = await rootBundle.load(
+    "assets/fonts/lohit_gujarati.ttf",
+  );
+  final gujaratiFont = pw.Font.ttf(gujaratiFontData);
 
   final pdf = pw.Document(
     pageMode: PdfPageMode.fullscreen,
@@ -107,6 +111,8 @@ Future<String> generateDescTestPdf(
                       ),
                       ..._parseMarkdownToPdfWidgets(
                         question.questionEn.questionTxt,
+                        baseFont,
+                        gujaratiFont,
                       ),
                       if (showAnswers &&
                           question.questionEn.answerTxt.isNotEmpty) ...[
@@ -117,6 +123,8 @@ Future<String> generateDescTestPdf(
                         ),
                         ..._parseMarkdownToPdfWidgets(
                           question.questionEn.answerTxt,
+                          baseFont,
+                          gujaratiFont,
                         ),
                       ],
                     ],
@@ -129,6 +137,8 @@ Future<String> generateDescTestPdf(
                       ),
                       ..._parseMarkdownToPdfWidgets(
                         question.questionHi!.questionTxt,
+                        baseFont,
+                        gujaratiFont,
                       ),
                       if (showAnswers &&
                           question.questionHi!.answerTxt.isNotEmpty) ...[
@@ -139,6 +149,8 @@ Future<String> generateDescTestPdf(
                         ),
                         ..._parseMarkdownToPdfWidgets(
                           question.questionHi!.answerTxt,
+                          baseFont,
+                          gujaratiFont,
                         ),
                       ],
                     ],
@@ -151,6 +163,8 @@ Future<String> generateDescTestPdf(
                       ),
                       ..._parseMarkdownToPdfWidgets(
                         question.questionGj!.questionTxt,
+                        baseFont,
+                        gujaratiFont,
                       ),
                       if (showAnswers &&
                           question.questionGj!.answerTxt.isNotEmpty) ...[
@@ -161,6 +175,8 @@ Future<String> generateDescTestPdf(
                         ),
                         ..._parseMarkdownToPdfWidgets(
                           question.questionGj!.answerTxt,
+                          baseFont,
+                          gujaratiFont,
                         ),
                       ],
                     ],
@@ -458,6 +474,10 @@ Future<String> generateFullDescTestPdf(
 }) async {
   final base = await rootBundle.load("assets/fonts/ArialUnicodeMs.otf");
   final baseFont = pw.Font.ttf(base);
+  final gujaratiFontData = await rootBundle.load(
+    "assets/fonts/lohit_gujarati.ttf",
+  );
+  final gujaratiFont = pw.Font.ttf(gujaratiFontData);
 
   final pdf = pw.Document(
     pageMode: PdfPageMode.fullscreen,
@@ -612,7 +632,11 @@ Future<String> generateFullDescTestPdf(
             "Question (EN):",
             style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
           ),
-          ..._parseMarkdownToPdfWidgets(question.questionEn.questionTxt),
+          ..._parseMarkdownToPdfWidgets(
+            question.questionEn.questionTxt,
+            baseFont,
+            gujaratiFont,
+          ),
           if (showAnswers &&
               question.questionEn.answerTxt.isNotEmpty) ...[
             pw.SizedBox(height: 10),
@@ -620,7 +644,11 @@ Future<String> generateFullDescTestPdf(
               "Model Answer (EN):",
               style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
             ),
-            ..._parseMarkdownToPdfWidgets(question.questionEn.answerTxt),
+            ..._parseMarkdownToPdfWidgets(
+              question.questionEn.answerTxt,
+              baseFont,
+              gujaratiFont,
+            ),
           ],
         ],
         if (langCodes[k] == 'hi' &&
@@ -630,7 +658,11 @@ Future<String> generateFullDescTestPdf(
             "Question (HI):",
             style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
           ),
-          ..._parseMarkdownToPdfWidgets(question.questionHi!.questionTxt),
+          ..._parseMarkdownToPdfWidgets(
+            question.questionHi!.questionTxt,
+            baseFont,
+            gujaratiFont,
+          ),
           if (showAnswers &&
               question.questionHi!.answerTxt.isNotEmpty) ...[
             pw.SizedBox(height: 10),
@@ -638,7 +670,11 @@ Future<String> generateFullDescTestPdf(
               "Model Answer (HI):",
               style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
             ),
-            ..._parseMarkdownToPdfWidgets(question.questionHi!.answerTxt),
+            ..._parseMarkdownToPdfWidgets(
+              question.questionHi!.answerTxt,
+              baseFont,
+              gujaratiFont,
+            ),
           ],
         ],
         if (langCodes[k] == 'gj' &&
@@ -648,7 +684,11 @@ Future<String> generateFullDescTestPdf(
             "Question (GJ):",
             style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
           ),
-          ..._parseMarkdownToPdfWidgets(question.questionGj!.questionTxt),
+          ..._parseMarkdownToPdfWidgets(
+            question.questionGj!.questionTxt,
+            baseFont,
+            gujaratiFont,
+          ),
           if (showAnswers &&
               question.questionGj!.answerTxt.isNotEmpty) ...[
             pw.SizedBox(height: 10),
@@ -656,7 +696,11 @@ Future<String> generateFullDescTestPdf(
               "Model Answer (GJ):",
               style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
             ),
-            ..._parseMarkdownToPdfWidgets(question.questionGj!.answerTxt),
+            ..._parseMarkdownToPdfWidgets(
+              question.questionGj!.answerTxt,
+              baseFont,
+              gujaratiFont,
+            ),
           ],
         ],
       ],
@@ -807,8 +851,37 @@ Future<String> generateFullDescTestPdf(
   }
 }
 
-/// --- Markdown Parsing Helpers (unchanged) ---
-List<pw.Widget> _parseMarkdownToPdfWidgets(String markdownText) {
+/// --- Script-aware font selection ---
+/// ArialUnicodeMs.otf has real OpenType conjunct/half-form rules for some
+/// Gujarati consonants but not others (e.g. ત but not ક), producing
+/// visually-unfused conjuncts for the ones it lacks. lohit_gujarati.ttf is
+/// a font purpose-built for Gujarati with complete conjunct coverage, so
+/// any text containing Gujarati codepoints is rendered with it instead.
+bool _containsGujarati(String text) {
+  for (final rune in text.runes) {
+    if (rune >= 0x0A80 && rune <= 0x0AFF) return true;
+  }
+  return false;
+}
+
+pw.Font _fontFor(String text, pw.Font baseFont, pw.Font gujaratiFont) =>
+    _containsGujarati(text) ? gujaratiFont : baseFont;
+
+/// lohit_gujarati.ttf only covers Gujarati script + basic ASCII, so
+/// content mixing Gujarati with symbols it lacks (e.g. "→" used as a
+/// flowchart separator in some answers) would otherwise render as a
+/// missing-glyph box. Keep the other font available as a fallback so
+/// those individual characters still draw, without affecting Gujarati
+/// conjunct shaping (which only ever runs against the primary font).
+List<pw.Font> _fallbackFor(String text, pw.Font baseFont, pw.Font gujaratiFont) =>
+    _containsGujarati(text) ? [baseFont] : [gujaratiFont];
+
+/// --- Markdown Parsing Helpers ---
+List<pw.Widget> _parseMarkdownToPdfWidgets(
+  String markdownText,
+  pw.Font baseFont,
+  pw.Font gujaratiFont,
+) {
   final lines = markdownText.split('\n');
   List<pw.Widget> widgets = [];
   int i = 0;
@@ -822,7 +895,7 @@ List<pw.Widget> _parseMarkdownToPdfWidgets(String markdownText) {
         tableLines.add(lines[i]);
         i++;
       }
-      widgets.add(_buildPdfTableFromMarkdown(tableLines));
+      widgets.add(_buildPdfTableFromMarkdown(tableLines, baseFont, gujaratiFont));
       widgets.add(pw.SizedBox(height: 8));
     } else {
       final buffer = StringBuffer();
@@ -835,7 +908,7 @@ List<pw.Widget> _parseMarkdownToPdfWidgets(String markdownText) {
         final document = md.Document(encodeHtml: false);
         final nodes = document.parseLines(normalMd.split('\n'));
         for (var node in nodes) {
-          widgets.addAll(_markdownNodeToPdfWidget(node));
+          widgets.addAll(_markdownNodeToPdfWidget(node, baseFont, gujaratiFont));
         }
       }
     }
@@ -844,7 +917,11 @@ List<pw.Widget> _parseMarkdownToPdfWidgets(String markdownText) {
   return widgets;
 }
 
-pw.Widget _buildPdfTableFromMarkdown(List<String> tableLines) {
+pw.Widget _buildPdfTableFromMarkdown(
+  List<String> tableLines,
+  pw.Font baseFont,
+  pw.Font gujaratiFont,
+) {
   List<List<String>> rows = tableLines
       .map(
         (line) => line
@@ -859,19 +936,31 @@ pw.Widget _buildPdfTableFromMarkdown(List<String> tableLines) {
   if (rows.length < 2) return pw.SizedBox();
   final header = rows[0];
   final dataRows = rows.sublist(2);
+  final tableText = [...header, ...dataRows.expand((r) => r)].join();
+  final tableFont = _fontFor(tableText, baseFont, gujaratiFont);
+  final tableFallback = _fallbackFor(tableText, baseFont, gujaratiFont);
 
   return pw.TableHelper.fromTextArray(
     headers: header,
     data: dataRows,
     border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey),
-    headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+    headerStyle: pw.TextStyle(
+      fontWeight: pw.FontWeight.bold,
+      font: tableFont,
+      fontFallback: tableFallback,
+    ),
+    cellStyle: pw.TextStyle(font: tableFont, fontFallback: tableFallback),
     headerDecoration: pw.BoxDecoration(color: PdfColors.grey200),
     cellAlignment: pw.Alignment.centerLeft,
     cellPadding: const pw.EdgeInsets.all(4),
   );
 }
 
-List<pw.Widget> _markdownNodeToPdfWidget(md.Node node) {
+List<pw.Widget> _markdownNodeToPdfWidget(
+  md.Node node,
+  pw.Font baseFont,
+  pw.Font gujaratiFont,
+) {
   if (node is md.Element) {
     switch (node.tag) {
       case 'h1':
@@ -887,6 +976,8 @@ List<pw.Widget> _markdownNodeToPdfWidget(md.Node node) {
             style: pw.TextStyle(
               fontWeight: pw.FontWeight.bold,
               fontSize: 18 - (level * 2),
+              font: _fontFor(node.textContent, baseFont, gujaratiFont),
+              fontFallback: _fallbackFor(node.textContent, baseFont, gujaratiFont),
             ),
           ),
           pw.SizedBox(height: 4),
@@ -896,7 +987,7 @@ List<pw.Widget> _markdownNodeToPdfWidget(md.Node node) {
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: node.children!
-                .expand((li) => _markdownNodeToPdfWidget(li))
+                .expand((li) => _markdownNodeToPdfWidget(li, baseFont, gujaratiFont))
                 .toList(),
           ),
         ];
@@ -914,7 +1005,7 @@ List<pw.Widget> _markdownNodeToPdfWidget(md.Node node) {
                       pw.Expanded(
                         child: pw.Column(
                           crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: _markdownNodeToPdfWidget(li),
+                          children: _markdownNodeToPdfWidget(li, baseFont, gujaratiFont),
                         ),
                       ),
                     ],
@@ -924,36 +1015,73 @@ List<pw.Widget> _markdownNodeToPdfWidget(md.Node node) {
           ),
         ];
       case 'li':
-        return [pw.Bullet(text: node.textContent)];
+        return [
+          pw.Bullet(
+            text: node.textContent,
+            style: pw.TextStyle(
+              font: _fontFor(node.textContent, baseFont, gujaratiFont),
+              fontFallback: _fallbackFor(node.textContent, baseFont, gujaratiFont),
+            ),
+          ),
+        ];
       case 'p':
         return [
-          _spanFromMarkdownInline(node.children ?? []),
+          _spanFromMarkdownInline(node.children ?? [], baseFont, gujaratiFont),
           pw.SizedBox(height: 4),
         ];
       case 'strong':
       case 'em':
         return [
-          _spanFromMarkdownInline([node]),
+          _spanFromMarkdownInline([node], baseFont, gujaratiFont),
         ];
       case 'br':
         return [pw.SizedBox(height: 4)];
       default:
-        return [pw.Text(node.textContent)];
+        return [
+          pw.Text(
+            node.textContent,
+            style: pw.TextStyle(
+              font: _fontFor(node.textContent, baseFont, gujaratiFont),
+              fontFallback: _fallbackFor(node.textContent, baseFont, gujaratiFont),
+            ),
+          ),
+        ];
     }
   } else if (node is md.Text) {
-    return [pw.Text(node.text)];
+    return [
+      pw.Text(
+        node.text,
+        style: pw.TextStyle(
+          font: _fontFor(node.text, baseFont, gujaratiFont),
+          fontFallback: _fallbackFor(node.text, baseFont, gujaratiFont),
+        ),
+      ),
+    ];
   }
   return [];
 }
 
-pw.Widget _spanFromMarkdownInline(List<md.Node> nodes) {
+pw.Widget _spanFromMarkdownInline(
+  List<md.Node> nodes,
+  pw.Font baseFont,
+  pw.Font gujaratiFont,
+) {
   return pw.RichText(
     text: pw.TextSpan(
       children: nodes.map((node) {
         if (node is md.Text) {
-          return pw.TextSpan(text: node.text);
+          return pw.TextSpan(
+            text: node.text,
+            style: pw.TextStyle(
+              font: _fontFor(node.text, baseFont, gujaratiFont),
+              fontFallback: _fallbackFor(node.text, baseFont, gujaratiFont),
+            ),
+          );
         } else if (node is md.Element) {
-          final baseStyle = pw.TextStyle();
+          final baseStyle = pw.TextStyle(
+            font: _fontFor(node.textContent, baseFont, gujaratiFont),
+            fontFallback: _fallbackFor(node.textContent, baseFont, gujaratiFont),
+          );
           if (node.tag == 'strong' || node.tag == 'b') {
             return pw.TextSpan(
               text: node.textContent,
@@ -969,9 +1097,21 @@ pw.Widget _spanFromMarkdownInline(List<md.Node> nodes) {
           return pw.TextSpan(
             children: node.children?.map((e) {
               if (e is md.Text) {
-                return pw.TextSpan(text: e.text);
+                return pw.TextSpan(
+                  text: e.text,
+                  style: pw.TextStyle(
+                    font: _fontFor(e.text, baseFont, gujaratiFont),
+                    fontFallback: _fallbackFor(e.text, baseFont, gujaratiFont),
+                  ),
+                );
               } else if (e is md.Element) {
-                return pw.TextSpan(text: e.textContent);
+                return pw.TextSpan(
+                  text: e.textContent,
+                  style: pw.TextStyle(
+                    font: _fontFor(e.textContent, baseFont, gujaratiFont),
+                    fontFallback: _fallbackFor(e.textContent, baseFont, gujaratiFont),
+                  ),
+                );
               }
               return pw.TextSpan();
             }).toList(),
