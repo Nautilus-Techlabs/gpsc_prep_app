@@ -8,7 +8,7 @@ import 'package:gpsc_prep_app/core/helpers/log_helper.dart';
 import 'package:gpsc_prep_app/core/helpers/snack_bar_helper.dart';
 import 'package:gpsc_prep_app/domain/entities/question_model.dart';
 import 'package:gpsc_prep_app/domain/entities/result_with_top_score_model.dart';
-import 'package:gpsc_prep_app/presentation/screens/descriptive_test_module/desc_pdf_download.dart';
+import 'package:gpsc_prep_app/presentation/screens/descriptive_test_module/native_pdf_bridge.dart';
 import 'package:gpsc_prep_app/presentation/screens/preview_screen/pdf_export_service.dart';
 import 'package:gpsc_prep_app/utils/helper_methods/pdf_download_from_link.dart';
 import 'package:gpsc_prep_app/utils/services/test_link_generator.dart';
@@ -80,18 +80,21 @@ class DownLoadPdfBloc extends Bloc<DownLoadPdfEvent, DownLoadPdfState> {
     DownloadDescTestPdf event,
     Emitter<DownLoadPdfState> emit,
   ) async {
+    // Native (platform-channel) PDF generation is Android-only for now;
+    // simply skip on other platforms rather than attempting it.
+    if (!Platform.isAndroid) return;
+
     emit(DownLoadPdfStarted());
 
     try {
-      if (Platform.isAndroid &&
-          (await DeviceInfoPlugin().androidInfo).version.sdkInt >= 30) {
+      if ((await DeviceInfoPlugin().androidInfo).version.sdkInt >= 30) {
         await getExternalStorageDirectory();
       } else {
         await getDownloadsDirectory() ??
             await getApplicationDocumentsDirectory();
       }
 
-      final result = await generateDescTestPdf(
+      final result = await generateSingleDescTestPdfNative(
         event.question,
         event.index,
         event.testName,
@@ -119,9 +122,13 @@ class DownLoadPdfBloc extends Bloc<DownLoadPdfEvent, DownLoadPdfState> {
     DownloadFullDescTestPdf event,
     Emitter<DownLoadPdfState> emit,
   ) async {
+    // Native (platform-channel) PDF generation is Android-only for now;
+    // simply skip on other platforms rather than attempting it.
+    if (!Platform.isAndroid) return;
+
     try {
       emit(DownLoadPdfStarted());
-      final result = await generateFullDescTestPdf(
+      final result = await generateDescTestPdfNative(
         event.questions,
         event.testName,
         event.langCodes,

@@ -12,7 +12,7 @@ import 'package:gpsc_prep_app/domain/entities/desc_question_language_model.dart'
 import 'package:gpsc_prep_app/domain/entities/desc_question_model.dart';
 import 'package:gpsc_prep_app/presentation/blocs/descriptive_test/daily_descriptive_test_bloc.dart';
 import 'package:gpsc_prep_app/presentation/blocs/question/question_bloc.dart';
-import 'package:gpsc_prep_app/presentation/screens/descriptive_test_module/desc_pdf_download.dart';
+import 'package:gpsc_prep_app/presentation/screens/descriptive_test_module/native_pdf_bridge.dart';
 import 'package:gpsc_prep_app/utils/app_constants.dart';
 import 'package:gpsc_prep_app/utils/extensions/padding.dart';
 import 'package:markdown_widget/markdown_widget.dart';
@@ -516,9 +516,13 @@ class _DescFullQuestionsScreenState extends State<DescFullQuestionsScreen> {
   }
 
   Future<void> _downloadPdf(DescQuestionModel question, int index) async {
+    // Native (platform-channel) PDF generation is Android-only for now;
+    // simply skip on other platforms rather than attempting it.
+    if (!Platform.isAndroid) return;
+
     setState(() => _downloadingIndices.add(index));
     try {
-      await generateDescTestPdf(
+      await generateSingleDescTestPdfNative(
         question,
         index,
         widget.args.testName,
@@ -543,9 +547,13 @@ class _DescFullQuestionsScreenState extends State<DescFullQuestionsScreen> {
     List<DescQuestionModel> questions, {
     required bool isAnswer,
   }) async {
+    // Native (platform-channel) PDF generation is Android-only for now;
+    // simply skip on other platforms rather than attempting it.
+    if (!Platform.isAndroid) return;
+
     setState(() => _isDownloadingFull = true);
     try {
-      await generateFullDescTestPdf(
+      await generateDescTestPdfNative(
         questions,
         widget.args.testName,
         _availableLangs,
