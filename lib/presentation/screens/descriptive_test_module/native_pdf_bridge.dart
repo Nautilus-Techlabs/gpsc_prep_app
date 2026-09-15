@@ -1,10 +1,8 @@
-// Standalone bridge to the native (Kotlin Canvas/StaticLayout) PDF generator,
-// ported from the csv-to-pdf reference app, exposed via a platform channel
-// (see android/app/src/main/kotlin/com/starics/pdf/). Kept separate from
-// desc_pdf_download.dart on purpose: it's a distinct rendering path
-// (Android-only -- callers are expected to check Platform.isAndroid and
-// skip calling this on other platforms) and isn't meant to touch the
-// existing dart_pdf-based screen/flow's own code.
+// Bridge to the native (Kotlin Canvas/StaticLayout) PDF generator, ported
+// from the csv-to-pdf reference app and exposed via a platform channel (see
+// android/app/src/main/kotlin/com/starics/pdf/). Android-only -- callers
+// are expected to check Platform.isAndroid and skip calling this on other
+// platforms.
 import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
@@ -84,10 +82,8 @@ Future<String> generateDescTestPdfNative(
   return _invokeAndSave(questionArgs, testName, langCodes, showAnswers);
 }
 
-/// Same as [generateDescTestPdfNative], but for a single question (mirrors
-/// desc_pdf_download.dart's per-question generateDescTestPdf). [index] is
-/// used as the "Question N" number shown on the page, matching the
-/// dart_pdf version's behavior. Android-only.
+/// Same as [generateDescTestPdfNative], but for a single question. [index]
+/// is used as the "Question N" number shown on the page. Android-only.
 Future<String> generateSingleDescTestPdfNative(
   DescQuestionModel question,
   int index,
