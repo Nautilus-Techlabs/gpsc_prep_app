@@ -106,7 +106,7 @@ dependency_overrides:
     git:
       url: https://github.com/Nautilus-Techlabs/dart_pdf.git
       path: pdf
-      ref: "77ee68852d386acbdabafffc0daa53a43d5f7c90" # tag: indic-shaping-verified
+      ref: "a93f8dc141b1a3172b2d7f546e0a6744fc892f6a" # tag: indic-shaping-verified (ToUnicode conjunct fix)
   # excel's pubspec caps xml at <7.0.0, but its code never calls the
   # namespaceUri-aware APIs that changed in 7.x (checked excel 4.0.6 source
   # directly) -- forcing 7.x here so the pdf fork's SVG module (which does

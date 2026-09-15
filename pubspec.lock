@@ -1201,8 +1201,8 @@ packages:
     dependency: "direct main"
     description:
       path: pdf
-      ref: "77ee68852d386acbdabafffc0daa53a43d5f7c90"
-      resolved-ref: "77ee68852d386acbdabafffc0daa53a43d5f7c90"
+      ref: a93f8dc141b1a3172b2d7f546e0a6744fc892f6a
+      resolved-ref: a93f8dc141b1a3172b2d7f546e0a6744fc892f6a
       url: "https://github.com/Nautilus-Techlabs/dart_pdf.git"
     source: git
     version: "3.13.0"
