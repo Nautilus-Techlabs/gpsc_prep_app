@@ -1,10 +1,11 @@
 package com.starics.pdf
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
@@ -42,6 +43,8 @@ object PdfGenerator {
     private var lohitTypefaceRegular: Typeface? = null
     private var lohitTypefaceBold: Typeface? = null
 
+    private val logoBitmaps = mutableMapOf<String, Bitmap?>()
+
     /** Loads Lohit Gujarati from the Flutter asset bundle (already declared in pubspec.yaml,
      * so no separate copy is needed under android/app/src/main/assets). */
     fun initLohitTypeface(context: Context) {
@@ -56,6 +59,21 @@ object PdfGenerator {
             } catch (e: Exception) {
                 lohitTypefaceRegular = Typeface.DEFAULT
                 lohitTypefaceBold = Typeface.DEFAULT_BOLD
+            }
+        }
+    }
+
+    /** Loads (and caches) the real logo/social-icon PNGs from the Flutter asset bundle -- the
+     * same files desc_pdf_download.dart's dart_pdf footer uses -- instead of hand-drawn
+     * approximations, so both generators produce visually consistent output. */
+    private fun getLogoBitmap(context: Context, assetName: String): Bitmap? {
+        return logoBitmaps.getOrPut(assetName) {
+            try {
+                context.assets.open("flutter_assets/assets/images/$assetName").use { input ->
+                    BitmapFactory.decodeStream(input)
+                }
+            } catch (e: Exception) {
+                null
             }
         }
     }
@@ -98,6 +116,9 @@ object PdfGenerator {
         var currentY = CONTENT_TOP
         var currentPage: PdfDocument.Page? = null
         var currentCanvas: Canvas? = null
+        // 1-based page number -> its footer link rects, in PDF (Y-up) space, for the
+        // incremental-update annotator to turn into real clickable links after writeTo().
+        val linkRectsByPage = mutableMapOf<Int, List<LinkRect>>()
 
         fun startNewPage() {
             currentPage?.let { document.finishPage(it) }
@@ -106,7 +127,18 @@ object PdfGenerator {
             val newPage = document.startPage(pageInfo)
             currentPage = newPage
             currentCanvas = newPage.canvas
-            drawPageChrome(newPage.canvas, config)
+            val footerLinks = drawPageChrome(context, newPage.canvas, config)
+            linkRectsByPage[currentPageNumber] = footerLinks.map {
+                // Canvas space is Y-down from the top; PDF page space is Y-up from the
+                // bottom, so flip both edges and keep them ordered bottom < top.
+                LinkRect(
+                    left = it.left,
+                    top = PAGE_HEIGHT - it.top,
+                    right = it.right,
+                    bottom = PAGE_HEIGHT - it.bottom,
+                    uri = it.uri
+                )
+            }
             currentY = CONTENT_TOP
         }
 
@@ -171,12 +203,20 @@ object PdfGenerator {
         FileOutputStream(outputFile).use { out -> document.writeTo(out) }
         document.close()
 
+        // android.graphics.pdf.PdfDocument has no API for link annotations, so make the
+        // footer's social links actually clickable via a manual incremental PDF update.
+        try {
+            PdfLinkAnnotator.addLinks(outputFile, linkRectsByPage)
+        } catch (e: Exception) {
+            // Non-fatal: worst case the footer text/icons are visible but not clickable.
+        }
+
         return outputFile
     }
 
-    private fun drawPageChrome(canvas: Canvas, config: PdfConfig) {
+    private fun drawPageChrome(context: Context, canvas: Canvas, config: PdfConfig): List<LinkRect> {
         if (config.showWatermark) {
-            drawWatermark(canvas, config)
+            drawWatermark(context, canvas, config)
         }
         val borderPaint = Paint().apply {
             color = Color.BLACK
@@ -185,57 +225,47 @@ object PdfGenerator {
             isAntiAlias = true
         }
         canvas.drawRect(FRAME_LEFT, FRAME_TOP, FRAME_RIGHT, FRAME_BOTTOM, borderPaint)
-        drawPageFooter(canvas, config)
+        return drawPageFooter(context, canvas, config)
     }
 
-    private fun drawWatermark(canvas: Canvas, config: PdfConfig) {
-        val centerX = PAGE_WIDTH / 2f
-        val centerY = PAGE_HEIGHT / 2f + 50f
+    /** Draws the actual Star logo (assets/images/logo_without_bg.png) at low opacity,
+     * contained within the bordered frame -- matching dart_pdf's
+     * `pw.Opacity(opacity: 0.1, child: pw.Image(logoImage, fit: BoxFit.contain))` -- instead
+     * of a hand-drawn approximation. */
+    private fun drawWatermark(context: Context, canvas: Canvas, config: PdfConfig) {
+        val bitmap = getLogoBitmap(context, "logo_without_bg.png") ?: return
         val alphaInt = (config.watermarkAlpha * 255).toInt().coerceIn(10, 80)
 
-        val starTextPaint = Paint().apply {
-            color = Color.argb(alphaInt, 120, 120, 120)
-            textSize = 105f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD_ITALIC)
-            isAntiAlias = true
-            textAlign = Paint.Align.CENTER
-        }
-        canvas.drawText(config.watermarkText, centerX - 18f, centerY, starTextPaint)
+        val boxLeft = FRAME_LEFT + 16f
+        val boxTop = FRAME_TOP + 16f
+        val boxRight = FRAME_RIGHT - 16f
+        val boxBottom = FRAME_BOTTOM - 16f
+        val boxWidth = boxRight - boxLeft
+        val boxHeight = boxBottom - boxTop
 
-        val starIconPaint = Paint().apply {
-            color = Color.argb(alphaInt, 130, 130, 130)
-            style = Paint.Style.FILL
-            isAntiAlias = true
-        }
-        drawFivePointStar(canvas, centerX + 120f, centerY - 80f, 26f, starIconPaint)
+        val scale = minOf(boxWidth / bitmap.width, boxHeight / bitmap.height)
+        val drawWidth = bitmap.width * scale
+        val drawHeight = bitmap.height * scale
+        val left = boxLeft + (boxWidth - drawWidth) / 2f
+        val top = boxTop + (boxHeight - drawHeight) / 2f
 
-        val subTextPaint = Paint().apply {
-            color = Color.argb(alphaInt, 120, 120, 120)
-            textSize = 34f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
+        val paint = Paint().apply {
             isAntiAlias = true
-            textAlign = Paint.Align.CENTER
+            isFilterBitmap = true
+            alpha = alphaInt
         }
-        canvas.drawText(config.watermarkSubText, centerX, centerY + 58f, subTextPaint)
+        val destRect = RectF(left, top, left + drawWidth, top + drawHeight)
+        canvas.drawBitmap(bitmap, null, destRect, paint)
     }
 
-    private fun drawFivePointStar(canvas: Canvas, cx: Float, cy: Float, radius: Float, paint: Paint) {
-        val path = Path()
-        val innerRadius = radius * 0.42f
-        for (i in 0 until 10) {
-            val r = if (i % 2 == 0) radius else innerRadius
-            val angle = Math.toRadians((i * 36 - 90).toDouble())
-            val x = (cx + r * Math.cos(angle)).toFloat()
-            val y = (cy + r * Math.sin(angle)).toFloat()
-            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-        }
-        path.close()
-        canvas.drawPath(path, paint)
-    }
-
-    private fun drawPageFooter(canvas: Canvas, config: PdfConfig) {
+    /** Draws the footer using the real social-icon PNGs (assets/images/telegram_logo.png,
+     * gmail_logo.png, x_logo.png) at the same 10x10pt size dart_pdf uses, and returns the
+     * clickable regions (icon + handle) for the caller to turn into real link annotations --
+     * android.graphics.pdf.PdfDocument has no built-in way to add those itself. */
+    private fun drawPageFooter(context: Context, canvas: Canvas, config: PdfConfig): List<LinkRect> {
         val footerY = 799f
         var curX = CONTENT_LEFT
+        val links = mutableListOf<LinkRect>()
 
         val labelPaint = TextPaint().apply {
             color = Color.BLACK
@@ -259,77 +289,67 @@ object PdfGenerator {
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
             isAntiAlias = true
         }
-
-        val tgCirclePaint = Paint().apply {
-            color = Color.parseColor("#2AABEE")
-            style = Paint.Style.FILL
+        val iconPaint = Paint().apply {
             isAntiAlias = true
+            isFilterBitmap = true
         }
-        val tgY = footerY - 3f
-        canvas.drawCircle(curX + 4.5f, tgY, 4.5f, tgCirclePaint)
 
-        val planePaint = Paint().apply {
-            color = Color.WHITE
-            style = Paint.Style.STROKE
-            strokeWidth = 1f
-            isAntiAlias = true
+        // Telegram
+        val telegramLogo = getLogoBitmap(context, "telegram_logo.png")
+        val tgIconTop = footerY - 7.5f
+        val tgLinkStart = curX
+        if (telegramLogo != null) {
+            val dest = RectF(curX, tgIconTop, curX + 10f, tgIconTop + 10f)
+            canvas.drawBitmap(telegramLogo, null, dest, iconPaint)
         }
-        val tgPath = Path().apply {
-            moveTo(curX + 2.5f, tgY + 0.5f)
-            lineTo(curX + 6.5f, tgY - 1.5f)
-            lineTo(curX + 4.5f, tgY + 2.5f)
-            close()
-        }
-        canvas.drawPath(tgPath, planePaint)
-        curX += 13f
-
+        curX += 14f
         canvas.drawText(config.telegramHandle, curX, footerY, linkPaint)
-        curX += linkPaint.measureText(config.telegramHandle) + 14f
+        curX += linkPaint.measureText(config.telegramHandle)
+        links.add(LinkRect(tgLinkStart, tgIconTop, curX, footerY + 2f, "https://t.me/starics_prep"))
+        curX += 14f
 
         canvas.drawText("|", curX, footerY, sepPaint)
         curX += 14f
 
-        val gmailRect = RectF(curX, footerY - 7.5f, curX + 9f, footerY + 0.5f)
-        val gmailBgPaint = Paint().apply {
-            color = Color.parseColor("#EA4335")
-            style = Paint.Style.FILL
-            isAntiAlias = true
+        // Gmail
+        val gmailLogo = getLogoBitmap(context, "gmail_logo.png")
+        val gmailIconTop = footerY - 7.5f
+        val gmailLinkStart = curX
+        if (gmailLogo != null) {
+            val dest = RectF(curX, gmailIconTop, curX + 10f, gmailIconTop + 10f)
+            canvas.drawBitmap(gmailLogo, null, dest, iconPaint)
         }
-        canvas.drawRoundRect(gmailRect, 1.5f, 1.5f, gmailBgPaint)
-        val mLetterPaint = Paint().apply {
-            color = Color.WHITE
-            textSize = 6.5f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            textAlign = Paint.Align.CENTER
-            isAntiAlias = true
-        }
-        canvas.drawText("M", curX + 4.5f, footerY - 1f, mLetterPaint)
-        curX += 13f
-
+        curX += 14f
         canvas.drawText(config.emailContact, curX, footerY, linkPaint)
-        curX += linkPaint.measureText(config.emailContact) + 14f
+        curX += linkPaint.measureText(config.emailContact)
+        links.add(
+            LinkRect(
+                gmailLinkStart,
+                gmailIconTop,
+                curX,
+                footerY + 2f,
+                "mailto:${config.emailContact}"
+            )
+        )
+        curX += 14f
 
         canvas.drawText("|", curX, footerY, sepPaint)
         curX += 14f
 
-        val xRect = RectF(curX, footerY - 7.5f, curX + 9f, footerY + 0.5f)
-        val xBgPaint = Paint().apply {
-            color = Color.BLACK
-            style = Paint.Style.FILL
-            isAntiAlias = true
+        // X / Twitter
+        val xLogo = getLogoBitmap(context, "x_logo.png")
+        val xIconTop = footerY - 7.5f
+        val xLinkStart = curX
+        if (xLogo != null) {
+            val dest = RectF(curX, xIconTop, curX + 10f, xIconTop + 10f)
+            canvas.drawBitmap(xLogo, null, dest, iconPaint)
         }
-        canvas.drawRoundRect(xRect, 1.5f, 1.5f, xBgPaint)
-        val xLetterPaint = Paint().apply {
-            color = Color.WHITE
-            textSize = 6.5f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            textAlign = Paint.Align.CENTER
-            isAntiAlias = true
-        }
-        canvas.drawText("X", curX + 4.5f, footerY - 1f, xLetterPaint)
-        curX += 13f
-
+        curX += 14f
         canvas.drawText(config.xHandle, curX, footerY, linkPaint)
+        curX += linkPaint.measureText(config.xHandle)
+        links.add(LinkRect(xLinkStart, xIconTop, curX, footerY + 2f, "https://x.com/star_ics89"))
+
+        return links
     }
 
     private fun drawQuestionTopHeader(canvas: Canvas, srNo: Int, rightTitle: String) {

@@ -12,6 +12,16 @@ data class QuestionGroup(
     val byLanguage: Map<String, LangContent>
 )
 
+/** A clickable region to turn into a real PDF link annotation, in canvas (Y-down) space --
+ * PdfLinkAnnotator converts to PDF (Y-up) space using the page height. */
+data class LinkRect(
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float,
+    val uri: String
+)
+
 data class PdfConfig(
     val watermarkText: String = "Star",
     val watermarkSubText: String = "Institute of Civil Services",
